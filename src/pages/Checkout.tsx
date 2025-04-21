@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -9,6 +8,9 @@ import { CheckCircle, Clock, Calendar, CreditCard, AlertCircle } from "lucide-re
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import BookingSummary from "@/components/BookingSummary";
+import PaymentForm from "@/components/PaymentForm";
+import ConfirmationView from "@/components/ConfirmationView";
 
 interface BookingData {
   service: string;
@@ -122,51 +124,12 @@ const Checkout = () => {
     <div className="min-h-screen py-12 px-4">
       <div className="container mx-auto max-w-6xl">
         {isComplete ? (
-          <Card className="max-w-2xl mx-auto">
-            <CardHeader className="text-center pb-8">
-              <CheckCircle className="w-16 h-16 mx-auto text-green-500 mb-4" />
-              <CardTitle className="text-2xl">Booking Confirmed!</CardTitle>
-              <CardDescription>
-                Thank you for booking with BookMySalon. Your appointment has been confirmed.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="bg-secondary/30 p-4 rounded-md">
-                <div className="grid gap-3">
-                  <div className="flex items-center">
-                    <Calendar className="w-5 h-5 mr-2 text-primary" />
-                    <span className="font-medium">{formattedDate}</span>
-                  </div>
-                  <div className="flex items-center">
-                    <Clock className="w-5 h-5 mr-2 text-primary" />
-                    <span className="font-medium">{bookingData.time}</span>
-                  </div>
-                  <div className="flex items-center">
-                    <CreditCard className="w-5 h-5 mr-2 text-primary" />
-                    <span className="font-medium">
-                      {serviceDetails?.name} - ${serviceDetails?.price.toFixed(2)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="text-center text-sm text-muted-foreground">
-                <p>Booking reference: #BKSLN{Math.floor(Math.random() * 10000)}</p>
-                <p>A confirmation email has been sent to {bookingData.email}</p>
-              </div>
-            </CardContent>
-            <CardFooter className="flex-col space-y-4">
-              <Button 
-                onClick={() => navigate('/')} 
-                className="w-full md:w-auto"
-              >
-                Return to Home
-              </Button>
-              <p className="text-sm text-muted-foreground">
-                Need to reschedule? Please contact us at (555) 123-4567
-              </p>
-            </CardFooter>
-          </Card>
+          <ConfirmationView
+            serviceDetails={serviceDetails}
+            bookingData={bookingData}
+            formattedDate={formattedDate}
+            onHome={() => navigate("/")}
+          />
         ) : (
           <div className="grid md:grid-cols-12 gap-8">
             <div className="md:col-span-8">
@@ -175,104 +138,21 @@ const Checkout = () => {
                 Review your booking details and complete payment to confirm your appointment.
               </p>
 
-              {error && (
-                <Alert variant="destructive" className="mb-6">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertTitle>Error</AlertTitle>
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Payment</CardTitle>
-                  <CardDescription>Click the button below to pay using Stripe securely</CardDescription>
-                </CardHeader>
-                <CardContent className="flex justify-center py-6">
-                  <Button 
-                    className="w-full md:w-2/3" 
-                    onClick={handlePayment} 
-                    disabled={isLoading}
-                  >
-                    {isLoading ? "Processing..." : "Pay with Stripe"}
-                  </Button>
-                </CardContent>
-                <div className="flex items-center mt-4 text-sm text-muted-foreground px-6 pb-6">
-                  <AlertCircle className="w-4 h-4 mr-2" />
-                  <span>This is a demo. No actual payment will be processed.</span>
-                </div>
-              </Card>
+              <PaymentForm
+                isLoading={isLoading}
+                onPay={handlePayment}
+                error={error}
+              />
             </div>
-
             <div className="md:col-span-4">
-              <div className="sticky top-24">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Booking Summary</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div>
-                      <h3 className="font-medium mb-2">Selected Service</h3>
-                      <div className="bg-secondary/50 p-3 rounded-md">
-                        <div className="font-medium">
-                          {serviceDetails?.name}
-                        </div>
-                        <div className="text-primary font-medium mt-1">
-                          ${serviceDetails?.price.toFixed(2)}
-                        </div>
-                        <div className="text-sm text-muted-foreground mt-2">
-                          Duration: {serviceDetails?.duration} mins
-                        </div>
-                      </div>
-                    </div>
-
-                    <div>
-                      <h3 className="font-medium mb-2">Appointment</h3>
-                      <div className="bg-secondary/50 p-3 rounded-md">
-                        <div className="flex items-center mb-2">
-                          <Calendar className="h-4 w-4 mr-2 text-muted-foreground" />
-                          <span>{formattedDate}</span>
-                        </div>
-                        <div className="flex items-center">
-                          <Clock className="h-4 w-4 mr-2 text-muted-foreground" />
-                          <span>{bookingData.time}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div>
-                      <h3 className="font-medium mb-2">Customer</h3>
-                      <div className="bg-secondary/50 p-3 rounded-md">
-                        <p className="font-medium">{bookingData.name}</p>
-                        <p className="text-sm text-muted-foreground">{bookingData.email}</p>
-                        <p className="text-sm text-muted-foreground">{bookingData.phone}</p>
-                      </div>
-                    </div>
-
-                    <div className="pt-4">
-                      <div className="flex justify-between text-sm mb-2">
-                        <span>Subtotal</span>
-                        <span>${subtotal.toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between text-sm mb-2">
-                        <span>Tax (8%)</span>
-                        <span>${tax.toFixed(2)}</span>
-                      </div>
-                      <Separator className="my-2" />
-                      <div className="flex justify-between font-medium">
-                        <span>Total</span>
-                        <span>${total.toFixed(2)}</span>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-                <div className="mt-4 text-center text-sm text-muted-foreground">
-                  <p>
-                    By completing this booking, you agree to our{" "}
-                    <a href="#" className="text-primary hover:underline">Terms of Service</a>
-                  </p>
-                </div>
-              </div>
+              <BookingSummary
+                serviceDetails={serviceDetails}
+                bookingData={bookingData}
+                subtotal={subtotal}
+                tax={tax}
+                total={total}
+                formattedDate={formattedDate}
+              />
             </div>
           </div>
         )}
