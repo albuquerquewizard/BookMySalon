@@ -101,14 +101,16 @@ const Booking = () => {
                                 <SelectValue placeholder="Select a service" />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="">-- Select a service --</SelectItem>
+                                {/* Fix: Changed from empty string to placeholder-option */}
+                                <SelectItem value="placeholder-option" disabled>-- Select a service --</SelectItem>
                                 {services.map((service) => (
                                   <SelectItem key={service.id} value={service.id.toString()}>
                                     {service.name} - ${service.price}
                                   </SelectItem>
                                 ))}
                                 <Separator className="my-2" />
-                                <SelectItem value="">-- Packages --</SelectItem>
+                                {/* Fix: Changed from empty string to placeholder-packages */}
+                                <SelectItem value="placeholder-packages" disabled>-- Packages --</SelectItem>
                                 {packages.map((pkg) => (
                                   <SelectItem key={pkg.id} value={`package-${pkg.id}`}>
                                     {pkg.name} - ${pkg.price}
@@ -205,7 +207,7 @@ const Booking = () => {
                                       </SelectItem>
                                     ))
                                   ) : (
-                                    <SelectItem value="" disabled>
+                                    <SelectItem value="no-slots" disabled>
                                       No available slots
                                     </SelectItem>
                                   )}
