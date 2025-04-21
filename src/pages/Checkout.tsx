@@ -1,14 +1,12 @@
-
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { format } from "date-fns";
 import { CheckCircle, Clock, Calendar, CreditCard, AlertCircle } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 interface BookingData {
   service: string;
@@ -22,9 +20,11 @@ interface BookingData {
 
 const Checkout = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [bookingData, setBookingData] = useState<BookingData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
+  const { toast } = useToast();
 
   const getServiceDetails = (serviceId: string) => {
     if (serviceId.startsWith('package-')) {
@@ -35,6 +35,11 @@ const Checkout = () => {
   };
 
   useEffect(() => {
+    const success = searchParams.get('success');
+    if (success === '1') {
+      setIsComplete(true);
+    }
+
     const data = sessionStorage.getItem('bookingData');
     if (data) {
       const parsed = JSON.parse(data);
@@ -42,35 +47,31 @@ const Checkout = () => {
     } else {
       navigate('/booking');
     }
-  }, [navigate]);
-
-  const { toast } = useToast();
+  }, [navigate, searchParams]);
 
   const handlePayment = async () => {
     if (!bookingData) return;
     setIsLoading(true);
+    
     try {
-      const response = await fetch("/functions/v1/create-payment", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("sb-xqyqegtuurhybxlftnas-auth-token")}`,
-        },
-        body: JSON.stringify({
+      const { data, error } = await supabase.functions.invoke('create-payment', {
+        body: {
           amount: Math.round(total * 100),
           currency: "usd",
           bookingData: bookingData,
           successUrl: window.location.origin + "/checkout?success=1",
           cancelUrl: window.location.origin + "/checkout?canceled=1",
-        }),
+        }
       });
 
-      const data = await response.json();
+      if (error) {
+        throw new Error(error.message || "Failed to create payment session");
+      }
 
       if (data?.url) {
         window.location.href = data.url;
       } else {
-        throw new Error(data.error || "Failed to create payment session.");
+        throw new Error("No checkout URL returned from payment service");
       }
     } catch (error: any) {
       toast({
@@ -150,7 +151,6 @@ const Checkout = () => {
                 Review your booking details and complete payment to confirm your appointment.
               </p>
 
-              {/* Stripe single payment button */}
               <Card>
                 <CardHeader>
                   <CardTitle>Payment</CardTitle>
@@ -170,7 +170,6 @@ const Checkout = () => {
                   <span>This is a demo. No actual payment will be processed.</span>
                 </div>
               </Card>
-
             </div>
 
             <div className="md:col-span-4">
@@ -268,4 +267,3 @@ const packages = [
 ];
 
 export default Checkout;
-
