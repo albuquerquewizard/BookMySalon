@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -45,6 +46,15 @@ const Checkout = () => {
       setIsComplete(true);
     }
 
+    const canceled = searchParams.get('canceled');
+    if (canceled === '1') {
+      toast({
+        title: "Payment Canceled",
+        description: "Your payment process was canceled. You can try again when ready.",
+        variant: "destructive",
+      });
+    }
+
     const data = sessionStorage.getItem('bookingData');
     if (data) {
       try {
@@ -76,7 +86,7 @@ const Checkout = () => {
         bookingData: bookingData,
       });
       
-      const { data, error } = await supabase.functions.invoke('create-payment', {
+      const { data, error: apiError } = await supabase.functions.invoke('create-payment', {
         body: {
           amount: Math.round(total * 100),
           currency: "usd",
@@ -86,17 +96,18 @@ const Checkout = () => {
         }
       });
 
-      if (error) {
-        throw new Error(error.message || "Failed to create payment session");
+      if (apiError) {
+        throw new Error(apiError.message || "Failed to create payment session");
       }
 
       console.log("Payment response:", data);
 
-      if (data?.url) {
-        window.location.href = data.url;
-      } else {
+      if (!data?.url) {
         throw new Error("No checkout URL returned from payment service");
       }
+
+      // Redirect to Stripe
+      window.location.href = data.url;
     } catch (error: any) {
       console.error("Payment error:", error);
       setError(error?.message || "An error occurred processing your payment.");
