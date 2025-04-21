@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -7,6 +8,7 @@ import { format } from "date-fns";
 import { CheckCircle, Clock, Calendar, CreditCard, AlertCircle } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface BookingData {
   service: string;
@@ -24,6 +26,7 @@ const Checkout = () => {
   const [bookingData, setBookingData] = useState<BookingData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
 
   const getServiceDetails = (serviceId: string) => {
@@ -42,18 +45,35 @@ const Checkout = () => {
 
     const data = sessionStorage.getItem('bookingData');
     if (data) {
-      const parsed = JSON.parse(data);
-      setBookingData(parsed);
+      try {
+        const parsed = JSON.parse(data);
+        setBookingData(parsed);
+      } catch (e) {
+        console.error("Error parsing booking data:", e);
+        toast({
+          title: "Error",
+          description: "There was a problem loading your booking data. Please try again.",
+          variant: "destructive",
+        });
+        navigate('/booking');
+      }
     } else {
       navigate('/booking');
     }
-  }, [navigate, searchParams]);
+  }, [navigate, searchParams, toast]);
 
   const handlePayment = async () => {
     if (!bookingData) return;
     setIsLoading(true);
+    setError(null);
     
     try {
+      console.log("Sending payment request with data:", {
+        amount: Math.round(total * 100),
+        currency: "usd",
+        bookingData: bookingData,
+      });
+      
       const { data, error } = await supabase.functions.invoke('create-payment', {
         body: {
           amount: Math.round(total * 100),
@@ -68,12 +88,16 @@ const Checkout = () => {
         throw new Error(error.message || "Failed to create payment session");
       }
 
+      console.log("Payment response:", data);
+
       if (data?.url) {
         window.location.href = data.url;
       } else {
         throw new Error("No checkout URL returned from payment service");
       }
     } catch (error: any) {
+      console.error("Payment error:", error);
+      setError(error?.message || "An error occurred processing your payment.");
       toast({
         title: "Payment Error",
         description: error?.message || "An error occurred processing your payment.",
@@ -151,6 +175,14 @@ const Checkout = () => {
                 Review your booking details and complete payment to confirm your appointment.
               </p>
 
+              {error && (
+                <Alert variant="destructive" className="mb-6">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Error</AlertTitle>
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+
               <Card>
                 <CardHeader>
                   <CardTitle>Payment</CardTitle>
@@ -165,7 +197,7 @@ const Checkout = () => {
                     {isLoading ? "Processing..." : "Pay with Stripe"}
                   </Button>
                 </CardContent>
-                <div className="flex items-center mt-4 text-sm text-muted-foreground px-6">
+                <div className="flex items-center mt-4 text-sm text-muted-foreground px-6 pb-6">
                   <AlertCircle className="w-4 h-4 mr-2" />
                   <span>This is a demo. No actual payment will be processed.</span>
                 </div>
