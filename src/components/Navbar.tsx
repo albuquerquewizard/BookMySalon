@@ -1,13 +1,15 @@
-
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Menu, User, Scissors } from 'lucide-react';
+import LogoutButton from "@/components/LogoutButton";
+import { useAuth } from "@/contexts/AuthContext";
 
 const Navbar = () => {
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
+  const { user } = useAuth();
 
   const NavLink = ({ to, children }: { to: string; children: React.ReactNode }) => {
     const isActive = location.pathname === to;
@@ -34,7 +36,6 @@ const Navbar = () => {
             <span className="font-bold text-xl tracking-tight">BookMySalon</span>
           </Link>
           
-          {/* Desktop nav */}
           <nav className="ml-10 hidden md:flex items-center space-x-1">
             <NavLink to="/">Home</NavLink>
             <NavLink to="/services">Services</NavLink>
@@ -44,15 +45,20 @@ const Navbar = () => {
         
         <div className="flex items-center gap-4">
           <div className="hidden md:flex items-center gap-2">
-            <Link to="/signin">
-              <Button variant="ghost" size="sm">Sign In</Button>
-            </Link>
-            <Link to="/signup">
-              <Button variant="default" size="sm">Sign Up</Button>
-            </Link>
+            {!user ? (
+              <>
+                <Link to="/auth">
+                  <Button variant="ghost" size="sm">Sign In</Button>
+                </Link>
+                <Link to="/auth">
+                  <Button variant="default" size="sm">Sign Up</Button>
+                </Link>
+              </>
+            ) : (
+              <LogoutButton />
+            )}
           </div>
           
-          {/* Mobile menu */}
           <Sheet open={isOpen} onOpenChange={setIsOpen}>
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon" className="md:hidden">
