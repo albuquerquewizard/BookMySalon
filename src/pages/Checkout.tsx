@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -9,8 +8,8 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format } from "date-fns";
 import { CheckCircle, Clock, Calendar, CreditCard, AlertCircle } from "lucide-react";
+import { useToast } from "@/components/ui/use-toast";
 
-// Type definition for booking data
 interface BookingData {
   service: string;
   date: string; // ISO string
@@ -27,7 +26,6 @@ const Checkout = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
 
-  // Get service details
   const getServiceDetails = (serviceId: string) => {
     if (serviceId.startsWith('package-')) {
       const id = parseInt(serviceId.replace('package-', ''));
@@ -36,41 +34,64 @@ const Checkout = () => {
     return services.find(service => service.id.toString() === serviceId);
   };
 
-  // Load booking data from session storage
   useEffect(() => {
     const data = sessionStorage.getItem('bookingData');
     if (data) {
       const parsed = JSON.parse(data);
-      // Convert date string back to Date for display
       setBookingData(parsed);
     } else {
-      // Redirect to booking page if no data
       navigate('/booking');
     }
   }, [navigate]);
 
-  const handlePayment = () => {
+  const { toast } = useToast();
+
+  const handlePayment = async () => {
     setIsLoading(true);
-    // Simulate payment processing
-    setTimeout(() => {
+    try {
+      const bookingToSend = { ...bookingData };
+      delete bookingToSend.date;
+      const response = await fetch("/functions/v1/create-payment", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("sb-xqyqegtuurhybxlftnas-auth-token")}`,
+        },
+        body: JSON.stringify({
+          amount: Math.round(total * 100),
+          currency: "usd",
+          bookingData: bookingData,
+          successUrl: window.location.origin + "/checkout?success=1",
+          cancelUrl: window.location.origin + "/checkout?canceled=1",
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data?.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error(data.error || "Failed to create payment session.");
+      }
+    } catch (error: any) {
+      toast({
+        title: "Payment Error",
+        description: error?.message || "An error occurred processing your payment.",
+        variant: "destructive",
+      });
       setIsLoading(false);
-      setIsComplete(true);
-      // Clear the booking data from session storage
-      sessionStorage.removeItem('bookingData');
-    }, 2000);
+    }
   };
 
   if (!bookingData) {
     return <div className="container mx-auto py-12 text-center">Loading...</div>;
   }
 
-  // Get service or package details
   const serviceDetails = getServiceDetails(bookingData.service);
   const subtotal = serviceDetails?.price || 0;
-  const tax = subtotal * 0.08; // 8% tax
+  const tax = subtotal * 0.08;
   const total = subtotal + tax;
 
-  // Format the date for display
   const formattedDate = format(new Date(bookingData.date), "EEEE, MMMM d, yyyy");
 
   return (
@@ -130,7 +151,6 @@ const Checkout = () => {
                 Review your booking details and complete payment to confirm your appointment.
               </p>
               
-              {/* Payment Method Tabs */}
               <Tabs defaultValue="card" className="mb-8">
                 <TabsList className="grid w-full grid-cols-2">
                   <TabsTrigger value="card">Credit Card</TabsTrigger>
@@ -203,7 +223,6 @@ const Checkout = () => {
               </Tabs>
             </div>
             
-            {/* Order Summary - Right Side */}
             <div className="md:col-span-4">
               <div className="sticky top-24">
                 <Card>
@@ -211,7 +230,6 @@ const Checkout = () => {
                     <CardTitle>Booking Summary</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    {/* Service details */}
                     <div>
                       <h3 className="font-medium mb-2">Selected Service</h3>
                       <div className="bg-secondary/50 p-3 rounded-md">
@@ -227,7 +245,6 @@ const Checkout = () => {
                       </div>
                     </div>
                     
-                    {/* Date and time */}
                     <div>
                       <h3 className="font-medium mb-2">Appointment</h3>
                       <div className="bg-secondary/50 p-3 rounded-md">
@@ -242,7 +259,6 @@ const Checkout = () => {
                       </div>
                     </div>
                     
-                    {/* Customer details */}
                     <div>
                       <h3 className="font-medium mb-2">Customer</h3>
                       <div className="bg-secondary/50 p-3 rounded-md">
@@ -252,7 +268,6 @@ const Checkout = () => {
                       </div>
                     </div>
                     
-                    {/* Price breakdown */}
                     <div className="pt-4">
                       <div className="flex justify-between text-sm mb-2">
                         <span>Subtotal</span>
@@ -286,7 +301,6 @@ const Checkout = () => {
   );
 };
 
-// Sample service data
 const services = [
   { id: 1, name: "Haircut & Style", price: 45, duration: 45 },
   { id: 2, name: "Classic Facial", price: 60, duration: 60 },
@@ -299,7 +313,6 @@ const services = [
   { id: 9, name: "Root Touch-Up", price: 65, duration: 60 }
 ];
 
-// Sample package data
 const packages = [
   { id: 1, name: "Complete Makeover Package", price: 189, duration: 180 },
   { id: 2, name: "Men's Grooming Special", price: 129, duration: 120 }
