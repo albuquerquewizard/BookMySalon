@@ -10,39 +10,78 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Log environment variables availability (without exposing values)
+  console.log("SUPABASE_URL available:", !!Deno.env.get("SUPABASE_URL"));
+  console.log("SUPABASE_ANON_KEY available:", !!Deno.env.get("SUPABASE_ANON_KEY"));
+  console.log("SUPABASE_SERVICE_ROLE_KEY available:", !!Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"));
+  console.log("STRIPE_SECRET_KEY available:", !!Deno.env.get("STRIPE_SECRET_KEY"));
+
   let body: any = {};
   try {
     body = await req.json();
-  } catch {
+  } catch (e) {
+    console.error("Error parsing request body:", e);
     return new Response(JSON.stringify({ error: "Invalid JSON" }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 400,
     });
   }
 
-  const supabaseClient = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_ANON_KEY")!
-  );
+  // Create Supabase client for authentication
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
+  
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.error("Missing Supabase credentials");
+    return new Response(JSON.stringify({ error: "Server configuration error" }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500,
+    });
+  }
+
+  const supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
+  
+  // Get user from token
+  const authHeader = req.headers.get("Authorization") || "";
+  const token = authHeader.replace("Bearer ", "");
+  
+  if (!token) {
+    console.error("No authorization token provided");
+    return new Response(JSON.stringify({ error: "No authorization token provided" }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 401,
+    });
+  }
+  
   const {
     data: { user },
     error: userError,
-  } = await supabaseClient.auth.getUser(
-    req.headers.get("Authorization")?.replace("Bearer ", "") || ""
-  );
+  } = await supabaseClient.auth.getUser(token);
+  
   if (userError || !user?.email) {
+    console.error("Auth error:", userError);
     return new Response(JSON.stringify({ error: "User not authenticated" }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 401,
     });
   }
 
-  // Stripe setup
-  const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
+  // Initialize Stripe with the secret key
+  const stripeSecretKey = Deno.env.get("STRIPE_SECRET_KEY");
+  if (!stripeSecretKey) {
+    console.error("Stripe secret key not found in environment");
+    return new Response(JSON.stringify({ error: "Stripe configuration error" }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500,
+    });
+  }
+
+  const stripe = new Stripe(stripeSecretKey, {
     apiVersion: "2023-10-16",
   });
 
@@ -55,6 +94,7 @@ serve(async (req) => {
     !currency ||
     !bookingData
   ) {
+    console.error("Invalid request parameters:", { amount, currency, bookingData: !!bookingData });
     return new Response(
       JSON.stringify({
         error: "Missing or invalid amount, currency, or booking data.",
@@ -69,15 +109,20 @@ serve(async (req) => {
   // Attempt to find/create Stripe customer
   let customerId: string | undefined;
   try {
+    console.log("Looking up Stripe customer for email:", user.email);
     const customers = await stripe.customers.list({ email: user.email, limit: 1 });
     if (customers.data.length > 0) {
       customerId = customers.data[0].id;
+      console.log("Found existing Stripe customer:", customerId);
+    } else {
+      console.log("No existing customer found for email:", user.email);
     }
   } catch (err) {
-    console.error("Stripe customer lookup error", err.message);
+    console.error("Stripe customer lookup error:", err.message);
   }
 
   try {
+    console.log("Creating Stripe checkout session");
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       customer_email: customerId ? undefined : user.email,
@@ -95,14 +140,27 @@ serve(async (req) => {
       success_url: `${body.successUrl || req.headers.get("origin")}/checkout?success=1`,
       cancel_url: `${body.cancelUrl || req.headers.get("origin")}/checkout?canceled=1`,
     });
+    console.log("Stripe checkout session created:", session.id);
 
-    // Save order in Supabase (with service role key to bypass RLS for insert)
+    // Get Supabase service role client for database operations
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!supabaseServiceKey) {
+      console.error("Service role key not found in environment");
+      // Still return session URL, just won't save order to database
+      return new Response(JSON.stringify({ url: session.url }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      });
+    }
+
+    // Save order in Supabase with service role key to bypass RLS
     const serviceSupabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      supabaseUrl,
+      supabaseServiceKey,
       { auth: { persistSession: false } }
     );
-    await serviceSupabase.from("orders").insert({
+    
+    const { error: orderError } = await serviceSupabase.from("orders").insert({
       user_id: user.id,
       stripe_session_id: session.id,
       amount,
@@ -112,6 +170,13 @@ serve(async (req) => {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     });
+    
+    if (orderError) {
+      console.error("Error saving order to database:", orderError);
+      // Don't fail the request if database insert fails, still return session URL
+    } else {
+      console.log("Order saved to database successfully");
+    }
 
     return new Response(JSON.stringify({ url: session.url }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
