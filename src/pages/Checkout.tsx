@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -5,7 +6,6 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format } from "date-fns";
 import { CheckCircle, Clock, Calendar, CreditCard, AlertCircle } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
@@ -47,10 +47,9 @@ const Checkout = () => {
   const { toast } = useToast();
 
   const handlePayment = async () => {
+    if (!bookingData) return;
     setIsLoading(true);
     try {
-      const bookingToSend = { ...bookingData };
-      delete bookingToSend.date;
       const response = await fetch("/functions/v1/create-payment", {
         method: "POST",
         headers: {
@@ -125,7 +124,7 @@ const Checkout = () => {
                   </div>
                 </div>
               </div>
-              
+
               <div className="text-center text-sm text-muted-foreground">
                 <p>Booking reference: #BKSLN{Math.floor(Math.random() * 10000)}</p>
                 <p>A confirmation email has been sent to {bookingData.email}</p>
@@ -150,79 +149,30 @@ const Checkout = () => {
               <p className="text-muted-foreground mb-8">
                 Review your booking details and complete payment to confirm your appointment.
               </p>
-              
-              <Tabs defaultValue="card" className="mb-8">
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="card">Credit Card</TabsTrigger>
-                  <TabsTrigger value="paypal">PayPal</TabsTrigger>
-                </TabsList>
-                
-                <TabsContent value="card" className="mt-4">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Credit Card Details</CardTitle>
-                      <CardDescription>Enter your card information securely</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="card-number">Card Number</Label>
-                        <Input id="card-number" placeholder="1234 5678 9012 3456" />
-                      </div>
-                      
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="expiry">Expiry Date</Label>
-                          <Input id="expiry" placeholder="MM/YY" />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="cvc">CVC</Label>
-                          <Input id="cvc" placeholder="123" />
-                        </div>
-                      </div>
-                      
-                      <div className="space-y-2">
-                        <Label htmlFor="card-name">Name on Card</Label>
-                        <Input id="card-name" placeholder="John Doe" />
-                      </div>
-                    </CardContent>
-                    <CardFooter>
-                      <Button 
-                        className="w-full" 
-                        onClick={handlePayment}
-                        disabled={isLoading}
-                      >
-                        {isLoading ? "Processing..." : "Pay Now"}
-                      </Button>
-                    </CardFooter>
-                  </Card>
-                  
-                  <div className="flex items-center mt-4 text-sm text-muted-foreground">
-                    <AlertCircle className="w-4 h-4 mr-2" />
-                    <span>This is a demo. No actual payment will be processed.</span>
-                  </div>
-                </TabsContent>
-                
-                <TabsContent value="paypal" className="mt-4">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Pay with PayPal</CardTitle>
-                      <CardDescription>Click the button below to pay using PayPal</CardDescription>
-                    </CardHeader>
-                    <CardContent className="flex justify-center py-6">
-                      <Button className="w-full md:w-2/3" onClick={handlePayment} disabled={isLoading}>
-                        {isLoading ? "Processing..." : "Continue to PayPal"}
-                      </Button>
-                    </CardContent>
-                  </Card>
-                  
-                  <div className="flex items-center mt-4 text-sm text-muted-foreground">
-                    <AlertCircle className="w-4 h-4 mr-2" />
-                    <span>This is a demo. No actual payment will be processed.</span>
-                  </div>
-                </TabsContent>
-              </Tabs>
+
+              {/* Stripe single payment button */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Payment</CardTitle>
+                  <CardDescription>Click the button below to pay using Stripe securely</CardDescription>
+                </CardHeader>
+                <CardContent className="flex justify-center py-6">
+                  <Button 
+                    className="w-full md:w-2/3" 
+                    onClick={handlePayment} 
+                    disabled={isLoading}
+                  >
+                    {isLoading ? "Processing..." : "Pay with Stripe"}
+                  </Button>
+                </CardContent>
+                <div className="flex items-center mt-4 text-sm text-muted-foreground px-6">
+                  <AlertCircle className="w-4 h-4 mr-2" />
+                  <span>This is a demo. No actual payment will be processed.</span>
+                </div>
+              </Card>
+
             </div>
-            
+
             <div className="md:col-span-4">
               <div className="sticky top-24">
                 <Card>
@@ -244,7 +194,7 @@ const Checkout = () => {
                         </div>
                       </div>
                     </div>
-                    
+
                     <div>
                       <h3 className="font-medium mb-2">Appointment</h3>
                       <div className="bg-secondary/50 p-3 rounded-md">
@@ -258,7 +208,7 @@ const Checkout = () => {
                         </div>
                       </div>
                     </div>
-                    
+
                     <div>
                       <h3 className="font-medium mb-2">Customer</h3>
                       <div className="bg-secondary/50 p-3 rounded-md">
@@ -267,7 +217,7 @@ const Checkout = () => {
                         <p className="text-sm text-muted-foreground">{bookingData.phone}</p>
                       </div>
                     </div>
-                    
+
                     <div className="pt-4">
                       <div className="flex justify-between text-sm mb-2">
                         <span>Subtotal</span>
@@ -285,7 +235,6 @@ const Checkout = () => {
                     </div>
                   </CardContent>
                 </Card>
-                
                 <div className="mt-4 text-center text-sm text-muted-foreground">
                   <p>
                     By completing this booking, you agree to our{" "}
@@ -319,3 +268,4 @@ const packages = [
 ];
 
 export default Checkout;
+
